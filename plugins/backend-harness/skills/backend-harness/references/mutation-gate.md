@@ -1,5 +1,7 @@
 # Mutation Gate
 
+> See `references/state-schema.md` for the canonical `harness-state.json` structure and field semantics.
+
 ## When It Runs
 
 The mutation gate runs **after functional tests pass** — specifically at step 9 in the outer orchestration loop, once all unit tests and integration tests are green across all components. The gate does NOT run on functionally broken code.
@@ -79,26 +81,20 @@ Example state after mutation gate failure on iteration 1:
 
 ```json
 {
-  "plan": {
-    "components": {
-      "OrderService": {
-        "iterations": 1,
-        "status": "fixing",
-        "failureType": "mutation"
-      }
-    }
+  "phase": "fix",
+  "iterations": {
+    "OrderService": 1
   },
   "evaluation": {
-    "lastStrategy": "full",
-    "failureDetails": {
-      "type": "mutation",
-      "file": "src/Services/OrderService.cs",
-      "tier": "services",
-      "threshold": 70,
-      "score": 62
-    }
+    "lastStrategy": "full"
   },
-  "phase": "fixing"
+  "failureHistory": [
+    {
+      "iteration": 1,
+      "signature": "mutation:src/Services/OrderService.cs#services:62%",
+      "component": "OrderService"
+    }
+  ]
 }
 ```
 

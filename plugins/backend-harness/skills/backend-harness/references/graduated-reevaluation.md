@@ -1,5 +1,7 @@
 # Graduated Re-Evaluation Strategy
 
+> See `references/state-schema.md` for the canonical `harness-state.json` structure and field semantics.
+
 ## Overview
 
 The graduated re-evaluation strategy balances cost and coverage when the Fix Agent iterates to address test failures. Rather than fully evaluating every iteration (expensive) or narrowly evaluating only failing components every time (risks missing regressions), this approach graduates the scope based on iteration count:
@@ -14,13 +16,9 @@ The strategy selection is driven by the `iterations[component]` counter in `plan
 
 ```json
 {
-  "plan": {
-    "components": {
-      "OrderService": {
-        "iterations": 2,
-        "status": "fixing"
-      }
-    }
+  "phase": "fix",
+  "iterations": {
+    "OrderService": 2
   },
   "evaluation": {
     "lastStrategy": "component-scoped"
@@ -66,16 +64,17 @@ Scenario: The `OrderService` component is failing the test `xunit:OrderTests.Tot
 - Result: the discount test passes, but a new failure emerges in `PaymentService` (e.g., negative refund validation)
 - `iterations[OrderService]` = 1
 - `evaluation.lastStrategy` = `"full"`
-- Status: `fixing`, loop repeats
+- Phase: `fix`, loop repeats
 
 **Iteration 2: Component-Scoped Evaluation**
 - Fix Agent now targets the `PaymentService` issue
 - Patches `src/Services/PaymentService.cs` to reject negative refunds
 - Evaluation runs: unit tests and integration tests for `PaymentService` only (cheaper)
 - Result: `PaymentService` tests pass, all `PaymentService`-scoped tests green
-- `iterations[OrderService]` = 2 (the counter for the originally-failing component)
+- `iterations[OrderService]` = 2
 - `evaluation.lastStrategy` = `"component-scoped"`
-- Status: still `fixing`, loop repeats
+- **Note:** The iteration counter tracks the per-component fix attempts across all evaluations in the run, not just the current iteration's target component.
+- Phase: still `fix`, loop repeats
 
 **Iteration 3: Full Evaluation (Final Safety Net)**
 - Fix Agent re-evaluates to ensure no regressions; runs a full eval
@@ -83,7 +82,7 @@ Scenario: The `OrderService` component is failing the test `xunit:OrderTests.Tot
 - Result: All tests pass
 - `iterations[OrderService]` = 3
 - `evaluation.lastStrategy` = `"full"`
-- Status: transitions to `validating` (move to mutation gate), exit the loop
+- Phase: transitions to `evaluate` (move to mutation gate), exit the loop
 
 ## When the Cap is Reached
 
@@ -93,9 +92,9 @@ If after 3 full iterations the component is still failing, the orchestrator esca
 {
   "phase": "escalated",
   "escalation": {
-    "reason": "iteration_cap_reached",
-    "component": "OrderService",
-    "detail": "3 fix iterations exhausted; component still failing"
+    "reason": "cap_exceeded",
+    "detail": "3 fix iterations exhausted; component still failing",
+    "signatures": ["xunit:OrderTests.Total_AppliesDiscount"]
   }
 }
 ```
