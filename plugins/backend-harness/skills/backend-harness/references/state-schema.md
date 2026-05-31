@@ -78,7 +78,7 @@ Below is the canonical JSON schema for `harness-state.json`:
 | `failureHistory[].signature` | string | A stable, queryable identifier for the failure (e.g., `xunit:PaymentTests.Refund_NegativeAmount`, `jest:AuthService.test.js#line42`, `pytest:TestPayment::test_refund_negative`). Format is `<framework>:<test-identifier>` to allow cross-framework searches. |
 | `failureHistory[].component` | string | The component that contains or exercises this failure. Used to attribute oscillation to a specific component and enforce the 3-iteration cap. |
 | `iterations` | object | Per-component fix attempt counter. Keys are component names; values are the current iteration count for that component (1, 2, or 3). When a component reaches 3 iterations, the orchestrator escalates to the human (cap exceeded). |
-| `escalation` | null or object | `null` until escalation occurs. When escalated, contains: `reason` (string: "oscillation" or "cap_exceeded"), `detail` (human-readable explanation), and `signatures` (array of signature strings that triggered the escalation). |
+| `escalation` | null or object | `null` until escalation occurs. When escalated, contains: `reason` (string: "oscillation", "cap_exceeded", or "blocked"), `detail` (human-readable explanation), and `signatures` (array of signature strings that triggered the escalation). Values: `"oscillation"` — cyclic failure pattern detected; coupling problem requiring human judgment. `"cap_exceeded"` — 3-iteration cap reached for a component. `"blocked"` — a subagent returned BLOCKED and autonomous progress cannot continue. |
 
 ## Section 5: Write Discipline
 
