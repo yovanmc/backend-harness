@@ -60,9 +60,15 @@ Stop inspecting and write the brief when you have covered all five sections abov
 
 ### Output Contract
 
-- Write the brief to `plans/context-brief.md` in the target repository
-- Return with status **DONE** and confirm the path where the file was written
-- Include a one-line summary of the codebase type (e.g., "ASP.NET Core REST API with Entity Framework", "Node.js Express microservice")
+Write the brief to `plans/context-brief.md` in the target repository and return with this format:
+
+```
+Status: DONE
+Brief Path: plans/context-brief.md
+Summary: <one-line description of what was found, e.g. "ASP.NET Core 8 REST API with Entity Framework Core, xUnit tests, Testcontainers for integration">
+```
+
+Also include: Keep sections lean — orientation for new developers, not exhaustive documentation.
 
 ---
 

@@ -84,14 +84,21 @@ Get the commit SHA from `git rev-parse HEAD` or `git log -1 --oneline`.
 
 ## Output Contract
 
-You **MUST** return a structured report with these fields:
+You **MUST** return a JSON block with this exact structure:
 
+```json
+{
+  "status": "DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED",
+  "commitSha": "abc1234",
+  "signaturesPassing": ["xunit:ClassName.MethodName"],
+  "regressionCheck": "PASS | FAIL",
+  "concerns": "Optional: describe concerns or blocking reason here"
+}
 ```
-Status: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
-Commit SHA: <40-character hex string>
-Signatures Now Passing: [<signature1>, <signature2>, ...]
-Regression Check: PASS | FAIL
-```
+
+Field notes:
+- `signaturesPassing` contains the previously-failing signatures that are now passing. If status is DONE and all signatures are passing, this should contain the same signatures as the input array.
+- `concerns` is omitted when status is DONE with no concerns. Include it for DONE_WITH_CONCERNS, NEEDS_CONTEXT, or BLOCKED statuses to explain the situation.
 
 ### Status Semantics
 
@@ -106,18 +113,9 @@ Mirror superpowers subagent conventions:
   - Possible regressions in behavior not caught by the test suite
   - Example: "Fixed by adding a bandaid constant; suggests a deeper design issue"
 
-- **`NEEDS_CONTEXT`** — You cannot complete the fix without information not provided:
-  - Unclear which file contains the component code
-  - Ambiguous spec text (multiple interpretations of correct behavior)
-  - Missing environment setup (e.g., database schema, external service mocks)
-  - Signature does not match any test found in the codebase
-  - Example: "Signatures mention 'OrderService.Validate_Order_Total' but no such test exists in the repo"
+- **`NEEDS_CONTEXT`** — You can complete the task if given more information. Examples: the spec is ambiguous about which service layer to touch; you need clarification on the expected return type.
 
-- **`BLOCKED`** — You cannot proceed at all:
-  - Component files cannot be found in the worktree
-  - Test command does not run (missing dependencies, build errors)
-  - A blocking upstream issue exists (another component's fix is required first)
-  - Example: "Cannot run tests: dotnet is not installed or not in PATH"
+- **`BLOCKED`** — Your environment or prerequisites are not met. Examples: the build won't compile at all; the test project is missing; you can find no matching component files for the named component.
 
 ### Other Fields
 
@@ -129,11 +127,13 @@ Mirror superpowers subagent conventions:
 
 ### Example Report
 
-```
-Status: DONE
-Commit SHA: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
-Signatures Now Passing: ["xunit:PaymentTests.Refund_NegativeAmount", "xunit:PaymentTests.Refund_Exceeds_Balance"]
-Regression Check: PASS
+```json
+{
+  "status": "DONE",
+  "commitSha": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
+  "signaturesPassing": ["xunit:PaymentTests.Refund_NegativeAmount", "xunit:PaymentTests.Refund_Exceeds_Balance"],
+  "regressionCheck": "PASS"
+}
 ```
 
 ## Constraints

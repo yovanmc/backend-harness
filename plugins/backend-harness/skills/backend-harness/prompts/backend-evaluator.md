@@ -35,6 +35,8 @@ The orchestrator provides:
    - For Jest: `jest:AuthService.test.js#line42` (or another stable identifier)
    - For pytest: `pytest:TestPayment::test_refund_negative`
 
+   **To determine which test framework to use as the prefix:** inspect the test runner output header (e.g., 'xUnit.net v2', 'NUnit', 'MSTest'), or check the test project's package references. Use `xunit`, `nunit`, `mstest`, `jest`, or `pytest` as the prefix accordingly.
+
    Extract only **failing test signatures**. Passed tests do not produce signatures.
 
 ### Step 3: Run Integration Tests
@@ -79,6 +81,21 @@ You **MUST** return a JSON block with this exact structure:
   ]
 }
 ```
+
+### Fallback JSON for Command Execution Failure
+
+If a command fails to execute (e.g., executable not found, file does not exist), report the error message before the JSON, then return this fallback JSON structure:
+
+```json
+{
+  "overall": "fail",
+  "strategy": "full|component-scoped",
+  "results": [],
+  "error": "<human-readable error message, e.g. dotnet command not found>"
+}
+```
+
+The orchestrator will recognise a result with an empty `results` array and a non-null `error` field as a tooling failure and escalate to the user rather than entering the fix loop.
 
 ### Field Semantics
 
@@ -134,6 +151,14 @@ You **MUST** return a JSON block with this exact structure:
 }
 ```
 
+## Non-Zero Exit Code Handling
+
+When a command returns a non-zero exit code, distinguish between test failure and tooling error:
+
+- **If stdout contains test failure output** (test names, FAILED markers, test counts), parse signatures normally — this is a test failure.
+- **If stderr contains a tool error** (e.g., 'dotnet: command not found', 'No such file or directory'), treat this as a **tooling error** — return the fallback JSON with `error` set to the stderr content.
+- **If exit code is non-zero and neither condition is clear**, treat as tooling error and include stdout+stderr in the `error` field.
+
 ## Constraints
 
 - **Do not modify code.** You are only running commands.
@@ -150,4 +175,4 @@ You **MUST** return a JSON block with this exact structure:
 ## Output You Must Return
 
 - The JSON structure above (no additional commentary unless there were command execution errors)
-- If a command failed to execute (e.g., executable not found), report that error before the JSON, then return a fallback JSON with `"overall": "fail"`
+- If a command failed to execute (e.g., executable not found), report that error before the JSON, then return the fallback JSON with `"overall": "fail"`, an empty `results` array, and an `error` field with the error message
