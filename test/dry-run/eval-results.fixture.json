@@ -1,19 +1,21 @@
 {
   "description": "Scripted evaluator sequence for dry-run. Feed these returns to the Backend Evaluator (in order) instead of running real tests. The sequence exercises: (1) graduated re-evaluation strategy selection (full → component-scoped → full), and (2) oscillation detection — the same signature appears at call 1, resolves at call 2, and reappears at call 3.",
   "strategyLogic": {
-    "note": "Strategy is determined by iterations[component] at the time of the eval call.",
+    "note": "Strategy is determined by iterations[component] at the time of the eval call. iterations[C] is 0 when no fixes have been dispatched yet (initial state), increments to 1 after the first fix, and so on.",
     "rules": [
-      "iterations[component] == 1 → full",
-      "iterations[component] == 2 → component-scoped",
-      "iterations[component] == 3 → full (final safety net)"
+      "iterations[component] == 0 → full (first failure, no fixes dispatched yet)",
+      "iterations[component] == 1 → component-scoped (one fix dispatched; narrow re-check)",
+      "iterations[component] == 2 → full (regression safety net)",
+      "iterations[component] >= 3 → escalate (cap reached)",
+      "special: if lastStrategy == component-scoped AND overall == pass → force full regression eval next (even if iterations[C] would select component-scoped again)"
     ]
   },
   "sequence": [
     {
       "call": 1,
       "strategy": "full",
-      "iterationsAtCallTime": { "OrderService": 1 },
-      "strategyReason": "iterations[OrderService] == 1 → full",
+      "iterationsAtCallTime": { "OrderService": 0 },
+      "strategyReason": "iterations[OrderService] == 0 → full (first failure, no fixes dispatched yet)",
       "overall": "fail",
       "results": [
         {
@@ -31,27 +33,23 @@
     {
       "call": 2,
       "strategy": "component-scoped",
-      "iterationsAtCallTime": { "OrderService": 2 },
-      "strategyReason": "iterations[OrderService] == 2 → component-scoped",
-      "overall": "fail",
+      "scope": ["OrderService"],
+      "iterationsAtCallTime": { "OrderService": 1 },
+      "strategyReason": "ALL previously-failing components have iterations[C] == 1 → component-scoped",
+      "overall": "pass",
       "results": [
         {
           "component": "OrderService",
           "status": "pass",
           "signatures": []
-        },
-        {
-          "component": "PaymentService",
-          "status": "fail",
-          "signatures": ["xunit:PaymentTests.Refund_NegativeAmount"]
         }
       ]
     },
     {
       "call": 3,
       "strategy": "full",
-      "iterationsAtCallTime": { "OrderService": 3 },
-      "strategyReason": "iterations[OrderService] == 3 → full",
+      "iterationsAtCallTime": { "OrderService": 1 },
+      "strategyReason": "lastStrategy == component-scoped AND overall == pass → full regression check. No fix was dispatched after call 2 (OrderService passed), so iterations[OrderService] remains 1.",
       "overall": "fail",
       "results": [
         {
@@ -69,8 +67,8 @@
   ],
   "oscillationTrace": {
     "signature": "xunit:OrderTests.Total_AppliesDiscount",
-    "call1": "present (fail)",
-    "call2": "absent (resolved — OrderService passed in component-scoped eval)",
-    "call3": "reappears (fail) → OSCILLATION DETECTED"
+    "call1": "present (fail) — full eval, OrderService fails",
+    "call2": "absent (resolved — OrderService passed in component-scoped eval, fix worked)",
+    "call3": "reappears (fail) — full regression check reveals OrderService failure again → OSCILLATION DETECTED"
   }
 }

@@ -115,17 +115,19 @@ For each failing component, apply the per-component rule from `references/gradua
 
 ```
 for each failing component C:
-  if state.iterations[C] == 0 or state.iterations[C] == 1:
-    → C requires "full" scope
+  if state.iterations[C] == 0:
+    → C requires "full" scope  (first failure, no fixes dispatched yet)
+  else if state.iterations[C] == 1:
+    → C can be "component-scoped"  (one fix dispatched; narrow re-check)
   else if state.iterations[C] == 2:
-    → C can be "component-scoped"
+    → C requires "full" scope  (regression safety net)
   else if state.iterations[C] >= 3:
     → will be caught by the cap check (Step 7); skip here
 
 If ANY failing component requires "full" scope:
   strategy = "full"
   scope = "all"
-Else if ALL failing components are at iteration 2:
+Else if ALL previously-failing components have iterations[C] == 1:
   strategy = "component-scoped"
   scope = [list of failing component names]
 ```

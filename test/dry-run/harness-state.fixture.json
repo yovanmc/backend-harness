@@ -5,13 +5,14 @@
     "lastStrategy": "full"
   },
   "iterations": {
-    "OrderService": 3
+    "OrderService": 1
   },
   "escalation": {
     "reason": "oscillation",
     "detail": "OrderService <-> PaymentService coupling detected",
     "signatures": [
-      "xunit:OrderTests.Total_AppliesDiscount"
+      "xunit:OrderTests.Total_AppliesDiscount",
+      "xunit:PaymentTests.Refund_NegativeAmount"
     ],
     "components": ["OrderService", "PaymentService"],
     "iteration": 3
