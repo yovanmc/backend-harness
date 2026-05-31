@@ -70,6 +70,7 @@ assert got['escalation']['reason'] == 'oscillation', f"Expected reason=oscillati
 for sig in exp['escalation']['signatures']:
     assert sig in got['escalation']['signatures'], f"Missing signature: {sig}"
 assert got['iterations'] == exp['iterations'], f"Iteration mismatch: {got['iterations']} vs {exp['iterations']}"
+assert got['evaluation']['lastStrategy'] == exp['evaluation']['lastStrategy'], f"Strategy mismatch: {got['evaluation']['lastStrategy']} vs {exp['evaluation']['lastStrategy']}"
 print('dry-run PASS: oscillation detected, correct state persisted')
 ```
 
