@@ -55,8 +55,10 @@ Read `plans/harness-state.json` if it exists.
 
 - If `phase` is `escalated`: tell the user — "Previous run ended in escalation: [escalation.reason]. Review plans/harness-state.json for details. To restart, delete plans/harness-state.json." — and **stop**.
 - If `phase` is `done`: the run is already complete. Tell the user and stop.
-- If `phase` is any other value (`brief`, `implement`, `evaluate`, `fix`): resume at that phase — skip all prior steps.
-- If no state file exists: start fresh. Generate a new `runId` (UUID v4), set `phase=brief`, set `createdAt` and `updatedAt` to the current ISO 8601 timestamp, initialise `tasks`, `failureHistory`, `iterations`, and `escalation` per `references/state-schema.md`. Persist.
+- If `phase` is `implement`, `evaluate`, or `fix`: resume at that phase — skip all prior steps.
+  - `phase=fix` → resume at **Step 5** (Backend Evaluation) — the fix was already applied; re-evaluate.
+- If `phase` is `brief`: Step 2 (worktree) did not yet complete. Resume from **Step 2**, not Step 3.
+- If no state file exists: start fresh. Generate a new `runId` (UUID v4), set `phase=brief`, set `createdAt` and `updatedAt` to the current ISO 8601 timestamp, initialise `tasks`, `failureHistory`, `iterations`, `escalation`, and `planPath` per `references/state-schema.md`. Set `planPath` to `"plans/<matched-plan-filename>.md"` using the plan file located during the Preflight plan check. Persist.
 
 State reference: `references/state-schema.md` — Section 3 (Full Schema) and Section 5 (Write Discipline).
 
@@ -68,7 +70,7 @@ Invoke `superpowers:using-git-worktrees` to create an isolated git worktree for 
 
 Record the absolute path returned by the worktree creation in `state.worktree`.
 
-Persist: `state.worktree` updated, phase unchanged.
+Persist: `state.worktree` updated, **`phase=implement`**. Setting `phase=implement` here (rather than leaving it as `brief`) ensures that if the session is interrupted after the worktree is created, Step 1's resume logic jumps directly to Step 3 — not back into Step 2 again.
 
 ### Step 3: Brief Gate (Conditional)
 
@@ -96,7 +98,7 @@ For each task in the plan file:
    - The worktree path
 4. Handle the subagent's return status:
    - `DONE` → proceed to next task
-   - `DONE_WITH_CONCERNS` → read the concerns, record them in `state.tasks[].title` or a note field, then proceed
+   - `DONE_WITH_CONCERNS` → log the concerns to the orchestrator's output (tell the user). Do **not** persist them to state — `state.tasks[].title` is the task name and must not be overwritten. Concerns do not block progress — proceed to the next task.
    - `NEEDS_CONTEXT` → provide the requested context and re-dispatch
    - `BLOCKED` → assess the blocking reason; if resolvable, resolve and re-dispatch; if not, escalate: set `state.phase=escalated`, `state.escalation = { "reason": "blocked", "detail": "<blocking reason>", "signatures": [] }`, persist, and tell the user
 5. After each task completes: set `state.tasks[].status=passed` and record `state.tasks[].commitSha` from the subagent's commit. Persist.
@@ -107,27 +109,39 @@ Persist: `phase=evaluate` after all tasks complete.
 
 Load the evaluation strategy by reading `references/graduated-reevaluation.md`.
 
-Determine the strategy scope for this evaluation based on the current maximum iteration count across failing components in `state.iterations`:
+Determine the strategy **per failing component** (not via a single max across all components). The failing components are those in `state.evaluation.components` with `status == "fail"` from the prior evaluation, or all components on the first run (when `state.iterations` is empty).
+
+For each failing component, apply the per-component rule from `references/graduated-reevaluation.md`:
 
 ```
-max_iterations = max(state.iterations.values(), default=0)
+for each failing component C:
+  if state.iterations[C] == 0 or state.iterations[C] == 1:
+    → C requires "full" scope
+  else if state.iterations[C] == 2:
+    → C can be "component-scoped"
+  else if state.iterations[C] >= 3:
+    → will be caught by the cap check (Step 7); skip here
 
-if max_iterations == 0 or max_iterations == 1:
+If ANY failing component requires "full" scope:
   strategy = "full"
-else if max_iterations == 2:
+  scope = "all"
+Else if ALL failing components are at iteration 2:
   strategy = "component-scoped"
-else if max_iterations == 3:
-  strategy = "full"
+  scope = [list of failing component names]
 ```
 
 Dispatch `prompts/backend-evaluator.md` with:
 - `worktree` — absolute worktree path from `state.worktree`
 - `config` — the parsed `harness.config.json` (commands: unit, integration, apiVerify)
-- `scope` — `"full"` or array of component names for component-scoped evaluation
+- `strategy` — `"full"` or `"component-scoped"`
+- `scope` — `"all"` when strategy is `"full"`, or the array of failing component names when strategy is `"component-scoped"`
 
 Parse the evaluator's JSON response (field: `results[]`).
 
-**If the response contains an `error` field and empty `results`:** this is a tooling failure, not a test failure. Tell the user — "Evaluation command failed: [error]. Fix the tooling issue and re-run /harness-implement." — and **stop**.
+**If the response contains an `error` field and empty `results`:** this is a tooling failure, not a test failure.
+- Set `state.phase = "escalated"`
+- Set `state.escalation = { "reason": "blocked", "detail": "Evaluator tooling error: <error field value>", "signatures": [] }`
+- Persist, then tell the user — "Evaluation command failed: [error]. Fix the tooling issue and re-run /harness-implement." — and **stop**.
 
 For each entry in `results` where `status == "fail"`:
 - Append entries to `state.failureHistory`: `{ iteration: state.iterations[component] ?? 0, signature: sig, component: component }` for each signature in `results[].signatures`
@@ -223,9 +237,13 @@ Per `references/mutation-gate.md`:
 4. If all changed files meet their tier threshold: the gate **passes** — proceed to **Step 10**.
 5. If any changed file is below its tier threshold: the gate **fails**.
    - Treat the failing file's component as a failing component
-   - Dispatch `prompts/fix-agent.md` for that component with context: "Component is functionally correct but mutation score is [X]% against required [Y]%. Improve test coverage for edge cases and corner logic paths."
    - Increment `state.iterations[component]` — mutation failures count against the 3-iteration cap
-   - Set `state.phase=evaluate` and loop back to **Step 5** (re-evaluate functional tests, then re-run mutation gate if functional tests still pass)
+   - **Cap check:** if `state.iterations[component] >= 3`:
+     - Set `state.phase = "escalated"`
+     - Set `state.escalation = { "reason": "cap_exceeded", "detail": "<component> reached 3-iteration cap on mutation gate", "signatures": [<failing tier signatures>] }`
+     - Persist, tell the user, and **STOP**
+   - If cap not yet reached: dispatch `prompts/fix-agent.md` for that component with context: "Component is functionally correct but mutation score is [X]% against required [Y]%. Improve test coverage for edge cases and corner logic paths."
+   - Set `state.phase=fix` and loop back to **Step 5** (re-evaluate functional tests, then re-run mutation gate if functional tests still pass)
 
 Persist after mutation gate result: `phase=evaluate` (re-entering the loop) or `phase=done` (if proceeding to Step 10).
 
