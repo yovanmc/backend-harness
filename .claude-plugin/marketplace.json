@@ -1,0 +1,14 @@
+{
+  "name": "backend-harness-marketplace",
+  "owner": {
+    "name": "Yovan Collins",
+    "url": "https://github.com/yovancollins"
+  },
+  "plugins": [
+    {
+      "name": "backend-harness",
+      "source": "./plugins/backend-harness",
+      "description": "Autonomous backend SDLC harness: a production-hardening orchestration layer over superpowers' subagent-driven-development."
+    }
+  ]
+}

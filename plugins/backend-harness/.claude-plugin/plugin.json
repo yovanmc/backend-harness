@@ -1,0 +1,9 @@
+{
+  "name": "backend-harness",
+  "version": "0.1.0",
+  "description": "Autonomous backend SDLC harness with disk-state persistence, graduated re-evaluation, tiered mutation gating, and oscillation detection. Layers on superpowers' subagent-driven-development.",
+  "author": {
+    "name": "Yovan Collins"
+  },
+  "keywords": ["sdlc", "orchestration", "subagents", "mutation-testing", "dotnet"]
+}
