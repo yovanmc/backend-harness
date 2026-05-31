@@ -11,10 +11,7 @@
     "reason": "oscillation",
     "detail": "OrderService <-> PaymentService coupling detected",
     "signatures": [
-      "xunit:OrderTests.Total_AppliesDiscount",
-      "xunit:PaymentTests.Refund_NegativeAmount"
-    ],
-    "components": ["OrderService", "PaymentService"],
-    "iteration": 3
+      "xunit:OrderTests.Total_AppliesDiscount"
+    ]
   }
 }

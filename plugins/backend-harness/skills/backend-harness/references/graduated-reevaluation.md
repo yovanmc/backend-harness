@@ -6,9 +6,9 @@
 
 The graduated re-evaluation strategy balances cost and coverage when the Fix Agent iterates to address test failures. Rather than fully evaluating every iteration (expensive) or narrowly evaluating only failing components every time (risks missing regressions), this approach graduates the scope based on iteration count:
 
-- **Iteration 1 fail** → full evaluation (catch all fallout)
-- **Iteration 2** → component-scoped evaluation (cheaper, faster)
-- **Iteration 3** → full evaluation again (catch regressions, final safety net)
+- **Iteration 0 (first failure)** → full evaluation (catch all fallout)
+- **Iteration 1** → component-scoped evaluation (cheaper, faster)
+- **Iteration 2** → full evaluation again (catch regressions, final safety net)
 
 ## State Tracking
 
@@ -33,11 +33,11 @@ After each evaluation runs, the chosen strategy is recorded in `evaluation.lastS
 ## Strategy Selection Logic
 
 ```
-if iterations[component] == 1:
+if iterations[component] == 0:
   strategy = "full"
-else if iterations[component] == 2:
+else if iterations[component] == 1:
   strategy = "component-scoped"
-else if iterations[component] == 3:
+else if iterations[component] == 2:
   strategy = "full"
 else:
   # Cap reached; do not evaluate, escalate
@@ -50,37 +50,37 @@ else:
 **Component-scoped evaluation every iteration** is too risky. Fixing component A to pass its tests may break tests in component B. Narrowing the scope every time means you won't see B's breakage until a later full run — or it goes unnoticed entirely if you cap at iteration 2.
 
 **Graduated approach** is the optimal middle:
-- Iteration 1 full run captures the immediate fallout from the first fix attempt
-- Iteration 2 component-scoped run is cheaper; if component A still has issues, we fix them without re-running the entire suite
-- Iteration 3 full run catches any regressions that component-scoped evaluation missed (e.g., the fix to A broke something in B that wasn't visible in iteration 2's narrow scope)
+- Iteration 0 (first failure) full run captures the immediate fallout from the first fix attempt
+- Iteration 1 component-scoped run is cheaper; if component A still has issues, we fix them without re-running the entire suite
+- Iteration 2 full run catches any regressions that component-scoped evaluation missed (e.g., the fix to A broke something in B that wasn't visible in iteration 1's narrow scope)
 
 ## Concrete 3-Iteration Walkthrough
 
 Scenario: The `OrderService` component is failing the test `xunit:OrderTests.Total_AppliesDiscount` (discount logic broken).
 
-**Iteration 1: Full Evaluation**
+**Iteration 0: Full Evaluation (First Failure)**
 - Fix Agent patches `src/Services/OrderService.cs` to apply discount logic correctly
 - Evaluation runs: unit tests, integration tests on all components
 - Result: the discount test passes, but a new failure emerges in `PaymentService` (e.g., negative refund validation)
-- `iterations[OrderService]` = 1
+- `iterations[OrderService]` = 0 (at this call)
 - `evaluation.lastStrategy` = `"full"`
 - Phase: `fix`, loop repeats
 
-**Iteration 2: Component-Scoped Evaluation**
+**Iteration 1: Component-Scoped Evaluation**
 - Fix Agent now targets the `PaymentService` issue
 - Patches `src/Services/PaymentService.cs` to reject negative refunds
 - Evaluation runs: unit tests and integration tests for `PaymentService` only (cheaper)
 - Result: `PaymentService` tests pass, all `PaymentService`-scoped tests green
-- `iterations[OrderService]` = 2
+- `iterations[OrderService]` = 1 (at this call; incremented after call 0)
 - `evaluation.lastStrategy` = `"component-scoped"`
 - **Note:** The iteration counter tracks the per-component fix attempts across all evaluations in the run, not just the current iteration's target component.
 - Phase: still `fix`, loop repeats
 
-**Iteration 3: Full Evaluation (Final Safety Net)**
+**Iteration 2: Full Evaluation (Final Safety Net)**
 - Fix Agent re-evaluates to ensure no regressions; runs a full eval
 - All unit and integration tests across all components
 - Result: All tests pass
-- `iterations[OrderService]` = 3
+- `iterations[OrderService]` = 2 (at this call; incremented after call 1)
 - `evaluation.lastStrategy` = `"full"`
 - Phase: transitions to `evaluate` (move to mutation gate), exit the loop
 

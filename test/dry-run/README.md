@@ -32,7 +32,7 @@ This dry-run requires manual injection of canned evaluator results at each dispa
 7. **Intercept the second evaluator dispatch:** paste the result from `sequence[1]`. Return `overall: "pass"` with OrderService passing. No fix is needed after this.
 8. The orchestrator runs a full regression eval (graduated re-eval: after component-scoped pass → full check) and dispatches the Backend Evaluator a third time with strategy `"full"`.
 9. **Intercept the third evaluator dispatch:** paste the result from `sequence[2]`. Return `overall: "fail"` with OrderService failing again on `xunit:OrderTests.Total_AppliesDiscount` (same signature as call 1).
-11. The orchestrator should detect oscillation (same signature appeared, resolved, reappeared within the same `runId`) and stop immediately.
+10. The orchestrator should detect oscillation (same signature appeared, resolved, reappeared within the same `runId`) and stop immediately.
 
 **Note:** This dry-run requires manual intervention at each evaluator dispatch to inject canned results. A future improvement could automate this via a mock evaluator config option in `harness.config.json`.
 
