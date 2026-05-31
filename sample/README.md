@@ -16,9 +16,11 @@ When the harness runs its full unit evaluation, the Backend Evaluator catches th
 
 **2. Mutation-gate seed (`PaymentService`)**
 
-`PaymentService` ships with **happy-path-only tests**. `PaymentService.Charge` has three branches (non-positive amount, amount exceeding order total, success) but only the success path is exercised. Stryker's surviving mutants on the untested guard branches push the kill-rate **below the `services` tier threshold (70%)**.
+`PaymentService` ships with **happy-path-only tests**. `PaymentService.Charge` has three branches (non-positive amount, amount exceeding order total, success) but only the success path is exercised. A *whole-file* Stryker run scores `PaymentService.cs` **below the `services` tier threshold (70%)** — you can confirm this directly (see "Verifying the seeds" below: ~46%).
 
-When the demo feature modifies `PaymentService.cs`, the harness's mutation gate evaluates the changed file, finds the kill-rate below 70%, and trips — driving a fix iteration that adds the missing edge-case tests.
+**Important — the gate is diff-scoped (line-level).** The harness's mutation gate scores only the mutants on the lines **this run changed**, not the whole file (see [`mutation-gate.md`](../plugins/backend-harness/skills/backend-harness/references/mutation-gate.md) for why). So on the refund-feature run, the gate measures the harness's *new* `Refund` code — which the inner loop tests well — and **passes**. The pre-existing thin `Charge` coverage sits on **unchanged** lines and is correctly out of scope: it's inherited debt the run never touched.
+
+The gate *trips* when the harness under-tests **its own changed lines** — e.g. if it added a guard branch with no test. That behavior is proven deterministically by the gate's unit tests (`plugins/backend-harness/skills/backend-harness/scripts/test_diff_scope_mutation.py`), which cover both the "undertested change fails" and "well-tested change passes despite untested neighbours" cases. The whole-file 46% figure here is the *standalone* mutation measurement, not what the diff-scoped gate sees during the feature run.
 
 ## Prerequisites
 
@@ -74,17 +76,20 @@ A human observing the run should see, in order:
 2. **Inner loop implements** `Refund` + the `POST /orders/{id}/refund` endpoint and commits.
 3. **First full evaluation fails** — `OrderServiceTests.Total_AppliesDiscount` is RED → `OrderService` flagged as a failing component.
 4. **Fix Agent fixes the discount bug** (`subtotal - discount`); `iterations[OrderService]` becomes 1.
-5. **Component-scoped re-eval of `OrderService` passes**; per the force-full rule, the next evaluation is full.
-6. **Full regression eval passes** — all functional tests green.
-7. **Mutation gate runs.** Stryker mutates the whole project and writes a per-file JSON report; the harness reads the score for each *changed* file and applies the tiered thresholds. For the changed `PaymentService.cs` (a `services`-tier file), the per-file kill-rate is ~46% — below 70% → **gate trips**; `iterations[PaymentService]` becomes 1.
-8. **Fix Agent adds edge-case tests** for the untested guard branches; the mutation gate re-runs and **passes** (≥ 70%).
-9. **`plans/harness-state.json` reaches `"phase": "done"`**; `superpowers:finishing-a-development-branch` runs.
+5. **Component-scoped re-eval of `OrderService` passes** — all functional tests (unit + integration + api-smoke) green.
+6. **Mutation gate runs (diff-scoped).** The harness runs a full `dotnet stryker`, then `scripts/diff-scope-mutation.py` re-scopes the report to only the lines this run changed. The new `Refund` code (the harness's own work) is well-tested → its changed-line score clears 70% → **gate passes**. The pre-existing thin `Charge` coverage is on *unchanged* lines and is correctly out of scope.
+7. **`plans/harness-state.json` reaches `"phase": "done"`**; `superpowers:finishing-a-development-branch` runs.
 
 ## Success criteria
 
-The run is a success when **both gates demonstrably fired** — one functional fix on `OrderService`, one mutation-driven fix on `PaymentService` — and the final state is `phase=done` with no escalation.
+The run is a success when:
+- The **functional fix loop fired** — the independent evaluator caught the seeded `OrderService` bug (with no shared context with the implementer), the Fix Agent corrected it, and re-evaluation went green; and
+- The **diff-scoped mutation gate passed** — the harness's own changed lines (the `Refund` feature) are adequately tested; and
+- The final state is `phase=done` with no escalation.
 
-Exact iteration counts depend on live subagent behavior; the acceptance bar is *the gates firing and convergence to `done`*, not a byte-exact state match.
+Exact iteration counts depend on live subagent behavior; the acceptance bar is *the functional fix loop converging and the diff-scoped gate ruling on the run's own changes*, not a byte-exact state match.
+
+**On seeing the gate trip:** the mutation gate trips when the harness under-tests **its own changed lines** (not on pre-existing debt). That behavior is proven deterministically by the gate's unit tests (`plugins/backend-harness/skills/backend-harness/scripts/test_diff_scope_mutation.py`) — run `python3 -m unittest` in the `scripts/` directory.
 
 ## Troubleshooting: dotnet not on PATH
 

@@ -75,12 +75,14 @@ The orchestrator logic remains unchanged. It reads the config, invokes the decla
 
 The `fileTierGlobs` object maps changed files to mutation score thresholds. See [mutation-gate.md](mutation-gate.md) for the complete gating mechanism.
 
+> **`commands.mutation` must be a FULL project run, not a diff/incremental mode.** The harness does its own line-level diff-scoping on the report (Stryker's native `--since` does not work inside the git worktree the harness runs in). Do **not** add `--since`/diff flags to the mutation command — the harness intersects the full report with `git diff` itself via `scripts/diff-scope-mutation.py`.
+
 **Quick overview:**
-- When mutation testing runs, the orchestrator detects which files were changed
+- The harness runs the full mutation command, then scores only the mutants on **lines this run changed** (diff against the run's base ref)
 - Each changed file is matched against the glob patterns in `fileTierGlobs`
-- If a file matches a glob (e.g., `**/Validators/**/*.cs`), it is held to that tier's threshold (e.g., `mutationThresholds.validators: 80`)
+- If a file matches a glob (e.g., `**/Validators/**/*.cs`), its changed-line score is held to that tier's threshold (e.g., `mutationThresholds.validators: 80`)
 - If a file matches no glob, it defaults to the lowest configured threshold (to avoid breaking builds on ambiguous files)
-- All tier thresholds must be met for the mutation gate to pass
+- All changed files must meet their tier threshold for the mutation gate to pass
 
 For example, if changes affect both a validator and a service:
 - The validator changes must achieve ≥80% mutation score

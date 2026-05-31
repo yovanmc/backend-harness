@@ -69,9 +69,9 @@ Persist after this step: `phase=brief` (if fresh start) or the resumed phase val
 
 Invoke `superpowers:using-git-worktrees` to create an isolated git worktree for this run. All implementation and evaluation work happens in this worktree — the main branch is never touched.
 
-Record the absolute path returned by the worktree creation in `state.worktree`.
+Record the absolute path returned by the worktree creation in `state.worktree`. Also record the ref the worktree forked from in `state.baseRef` (the integration branch the work will merge back into — default `main`; if unsure, use `git merge-base HEAD <integration-branch>`). The mutation gate (Step 9) diffs against this ref to scope itself to the run's changes.
 
-Persist: `state.worktree` updated, **`phase=implement`**. Setting `phase=implement` here (rather than leaving it as `brief`) ensures that if the session is interrupted after the worktree is created, Step 1's resume logic jumps directly to Step 3 — not back into Step 2 again.
+Persist: `state.worktree` and `state.baseRef` updated, **`phase=implement`**. Setting `phase=implement` here (rather than leaving it as `brief`) ensures that if the session is interrupted after the worktree is created, Step 1's resume logic jumps directly to Step 3 — not back into Step 2 again.
 
 ### Step 3: Brief Gate (Conditional)
 
@@ -232,18 +232,23 @@ Set `state.phase=fix`. Persist.
 
 This step runs once all components report `status == "pass"` in the functional evaluation (unit + integration + apiVerify). The mutation gate validates test quality — it checks that the tests are capable of catching real bugs.
 
+The gate is **diff-scoped at line level**: it scores only the mutants on lines this run changed (the diff against `state.baseRef`), not whole files. See `references/mutation-gate.md` for the full rationale and why Stryker's native `--since` cannot be used (it does not work inside git worktrees).
+
 Per `references/mutation-gate.md`:
 
 1. Read `commands.mutation` from `harness.config.json` in the target repo root. Never hardcode the mutation command.
-2. For each changed file in the worktree, determine its tier:
-   - Match against `harness.config.json` `fileTierGlobs` patterns in order (validators → services → controllers)
-   - Use the first matching tier; if no glob matches, default to the lowest configured threshold
-3. Apply thresholds from `harness.config.json` `mutationThresholds`:
-   - `validators` tier: requires `mutationThresholds.validators`%
-   - `services` tier: requires `mutationThresholds.services`%
-   - `controllers` tier: requires `mutationThresholds.controllers`%
-4. If all changed files meet their tier threshold: the gate **passes** — proceed to **Step 10**.
-5. If any changed file is below its tier threshold: the gate **fails**.
+2. Run the mutation command. It is a **full** project run (not `--since`) — Stryker writes a per-file JSON report (e.g. `StrykerOutput/<timestamp>/reports/mutation-report.json`). Locate the most recent report.
+3. Re-scope the report to the run's changed lines by invoking the committed helper:
+   ```
+   scripts/diff-scope-mutation.py \
+     --report <path to mutation-report.json> \
+     --base   <state.baseRef> \
+     --config <harness.config.json> \
+     --repo-root <state.worktree>
+   ```
+   The helper runs `git diff --unified=0 <baseRef>`, keeps only mutants on changed lines, computes a per-changed-file diff-scoped score, maps each file to its tier via `fileTierGlobs`, and applies the `mutationThresholds`. It prints a JSON verdict (`gate`, `files[]`, `failing[]`) and exits 0 (pass) or 1 (fail).
+4. If the helper reports `"gate": "pass"` (all changed files meet their tier threshold, or no changed lines carry mutants): the gate **passes** — proceed to **Step 10**.
+5. If the helper reports `"gate": "fail"` (any changed file's diff-scoped score is below its tier threshold): the gate **fails**.
    - Treat the failing file's component as a failing component
    - Increment `state.iterations[component]` — mutation failures count against the 3-iteration cap
    - **Cap check:** if `state.iterations[component] >= 3`:
@@ -275,7 +280,7 @@ All functional tests pass (unit + integration + apiVerify) AND the mutation gate
 | Step 6 | `references/oscillation-detection.md` | Oscillation detection across `failureHistory` |
 | Step 7 | `references/state-schema.md` | Cap check via `iterations` field |
 | Step 8 | `prompts/fix-agent.md` | Targeted fix dispatch per failing component |
-| Step 9 | `references/mutation-gate.md` | Tiered mutation score gating |
+| Step 9 | `references/mutation-gate.md`, `scripts/diff-scope-mutation.py` | Line-level diff-scoped tiered mutation gating |
 | Step 10 | superpowers `finishing-a-development-branch` | Branch completion, PR, or merge |
 
 ---

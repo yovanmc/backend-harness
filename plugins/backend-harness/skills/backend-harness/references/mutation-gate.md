@@ -8,6 +8,38 @@ The mutation gate runs **after functional tests pass** — specifically at step 
 
 This placement is critical: mutation testing is expensive (it synthesizes code variants and re-runs tests). Spending that cost on code that still has basic functional failures is wasteful. By gating mutations behind a functional-pass requirement, we avoid analyzing mutant quality for code that doesn't yet work.
 
+## Diff-Scoping: the gate scores CHANGED LINES only
+
+The gate judges the quality of **the work this run produced** — not pre-existing test debt the run never touched. It scores only the mutants that fall on **lines changed in this run** (the diff against the run's base ref). A mutant on an unchanged line is ignored.
+
+**Why line-level, not whole-file:** a whole-file mutation score is an average across every mutant in the file. Well-tested new code can dilute an untested neighbour in the same file — a file can clear its threshold while a freshly-added method is completely untested. Conversely, penalising a file for pre-existing untested code the run never modified is wrong: the harness should be accountable for what it wrote, not for inherited debt. Scoring only changed lines fixes both.
+
+**Why the harness does this itself (not Stryker `--since`):** Stryker.NET's native `--since` diff mode relies on libgit2 diff resolution that **does not work inside a git worktree** (it reports "0 files changed" / "No branch or tag or commit found"). The harness *always* runs in a worktree (outer-loop Step 2), so `--since` is unusable here. Instead the harness runs a **full** `dotnet stryker` (which works in worktrees) and re-scopes the report itself using `git diff` (which works fine in worktrees).
+
+### The helper: `scripts/diff-scope-mutation.py`
+
+The harness invokes the committed helper rather than parsing diffs ad hoc, so the gate is deterministic and unit-tested (`scripts/test_diff_scope_mutation.py`).
+
+```
+diff-scope-mutation.py \
+  --report   <StrykerOutput/**/reports/mutation-report.json> \
+  --base     <git ref the worktree forked from, e.g. main> \
+  --config   <harness.config.json> \
+  --repo-root <absolute git repo root of the worktree>
+```
+
+What it does:
+1. Runs `git -C <repo-root> diff --unified=0 <base>` and parses the hunks into `{file: {changed new-side line numbers}}`.
+2. For each file in the Stryker report, keeps only mutants whose `location.start.line` is a changed line.
+3. Computes a **diff-scoped** per-file score = `killed / (killed + survived + noCoverage)` over those mutants.
+4. Maps each changed file to its tier (see below) and compares against the threshold.
+
+Output (stdout JSON) and exit code:
+- `{"gate": "pass"|"fail", "files": [{path, tier, threshold, score, killed, survived, noCoverage, changedMutants, verdict}], "failing": [...]}`
+- Exit `0` = gate passes (or nothing to gate), `1` = gate fails, `2` = usage/IO error.
+
+Files whose changed lines carry no mutable code (e.g. a comment- or signature-only change) are **not gated** — there is nothing to measure.
+
 ## Tiered Thresholds
 
 Different code tiers are held to different mutation score thresholds, reflecting the value and risk profile of each tier:
@@ -22,19 +54,13 @@ Different code tiers are held to different mutation score thresholds, reflecting
 
 ```json
 {
-  "mutationThresholds": {
-    "validators": 80,
-    "services": 70,
-    "controllers": 60
-  }
+  "mutationThresholds": { "validators": 80, "services": 70, "controllers": 60 }
 }
 ```
 
-This allows stack maintainers to adjust thresholds per project without modifying the harness core.
-
 ## File-to-Tier Mapping
 
-The harness determines a file's tier using glob patterns defined in `harness.config.json`:
+A changed file's tier is determined by glob patterns in `harness.config.json`:
 
 ```json
 {
@@ -48,64 +74,46 @@ The harness determines a file's tier using glob patterns defined in `harness.con
 
 ### Matching Algorithm
 
-1. For each changed file, check it against the glob patterns in order
-2. Use the first tier whose glob matches the file
-3. If no glob matches, default to the lowest configured threshold (60%)
+1. For each **changed file that has mutants on its changed lines**, check it against the glob patterns in validators → services → controllers order.
+2. Use the first tier whose glob matches.
+3. If no glob matches, default to the lowest configured threshold (60% in the reference stack).
 
-### Concrete Example
+### Concrete Example (line-scoped)
 
-Changed file: `src/Services/OrderService.cs`
+A run adds a new `Refund` method to `src/Services/PaymentService.cs` and leaves the pre-existing `Charge` happy-path coverage untouched.
 
-1. Check `validators` globs: `**/Validators/**/*.cs` (no match), `**/*Validator.cs` (no match)
-2. Check `services` globs: `**/Services/**/*.cs` (MATCH)
-3. Tier assigned: `services`
-4. Required threshold: 70%
+- Stryker (full run) reports, say, 25 mutants across `PaymentService.cs`: the `Refund` lines are well-killed; the old `Charge` guard lines have survivors.
+- The gate keeps only mutants on the **changed** lines (the `Refund` additions). Those are well-tested → diff-scoped score ~100% → **pass**.
+- The untested `Charge` guards are on **unchanged** lines → ignored. They are pre-existing debt this run did not touch; the gate does not penalise the run for them.
 
-If the mutation score for changes to `OrderService.cs` is 73%, the file passes the gate. If it's 68%, the gate fails.
-
-Another example: Changed file: `src/Utilities/Helper.cs` (matches no glob)
-
-1. Check all globs: no matches
-2. Default tier: lowest threshold
-3. Required threshold: 60%
+The mirror case: if the run's *own* new lines are undertested (e.g. it adds a method with an unguarded branch and no test), those mutants survive on changed lines → diff-scoped score low → **gate fails**, and the fix loop is entered.
 
 ## Gate Failure Path
 
-When one or more changed files fail the mutation threshold:
+When one or more changed files fail their tier threshold:
 
-1. **Re-enter the fix loop** — dispatch the Fix Agent targeting the mutation-weak component (the one that failed the gate)
-2. **Count against the iteration cap** — a mutation failure consumes one of the 3 available fix iterations for that component
-3. **If the cap is reached** — escalate to human: "3 iterations exhausted; mutation score still below threshold"
+1. **Re-enter the fix loop** — dispatch the Fix Agent targeting the mutation-weak component (the file that failed), with context: "functionally correct but the changed lines are under-tested; add tests for the uncovered branches."
+2. **Count against the iteration cap** — a mutation failure consumes one of the 3 available fix iterations for that component.
+3. **If the cap is reached** — escalate to human with `reason: "cap_exceeded"`.
 
-Example state after mutation gate failure on iteration 1:
+Example state after a mutation gate failure on the first iteration:
 
 ```json
 {
   "phase": "fix",
-  "iterations": {
-    "OrderService": 1
-  },
-  "evaluation": {
-    "lastStrategy": "full"
-  },
+  "iterations": { "PaymentService": 1 },
+  "evaluation": { "lastStrategy": "full" },
   "failureHistory": [
-    {
-      "iteration": 1,
-      "signature": "mutation:src/Services/OrderService.cs#services:62%",
-      "component": "OrderService"
-    }
+    { "iteration": 1, "signature": "mutation:src/Services/PaymentService.cs#services:0%", "component": "PaymentService" }
   ]
 }
 ```
 
-The Fix Agent will receive this context and understand that the code is functionally correct but under-tested. It will focus on test coverage for edge cases and corner logic paths that mutations might expose.
-
 ## Rationale
 
-Mutation testing is a quality gate, not a functional gate. It validates that your tests are *good* — that they will catch real bugs if the code is subtly broken. By running mutations only on functionally-sound code, we ensure:
+Mutation testing is a quality gate, not a functional gate. It validates that the tests are *good* — that they would catch real bugs if the code were subtly broken. Scoping to changed lines makes the gate accountable to the run's own work:
 
-1. **Efficiency** — no wasted mutation analysis on code that doesn't work yet
-2. **Quality focus** — forces developers to think about edge cases and corner behaviors
-3. **Tier-appropriate rigor** — validators (pure logic) demand high test coverage, controllers (thin routing) can tolerate lower coverage
-
-Thresholds are not arbitrary; they reflect the risk/reward of testing different code layers. A 60% threshold for controllers acknowledges that thin routing layers have less business value per line of code, whereas validators (pure logic) demand 80% because a single mutation in validation logic can slip a bad input through an entire system.
+1. **Efficiency** — mutation analysis only on functionally-sound code.
+2. **Fair attribution** — the run is judged on what it changed, not inherited debt.
+3. **No dilution** — well-tested new code cannot mask an untested change in the same file.
+4. **Tier-appropriate rigor** — validators (pure logic) demand 80%; controllers (thin routing) tolerate 60%.
