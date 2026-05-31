@@ -245,7 +245,7 @@ Per `references/mutation-gate.md`:
    - If cap not yet reached: dispatch `prompts/fix-agent.md` for that component with context: "Component is functionally correct but mutation score is [X]% against required [Y]%. Improve test coverage for edge cases and corner logic paths."
    - Set `state.phase=fix` and loop back to **Step 5** (re-evaluate functional tests, then re-run mutation gate if functional tests still pass)
 
-Persist after mutation gate result: `phase=evaluate` (re-entering the loop) or `phase=done` (if proceeding to Step 10).
+Persist after mutation gate result: `phase=fix` (looping back to Step 5 after dispatching fix agent), `phase=escalated` (cap reached or tooling error), or `phase=done` (if all tiers pass, proceeding to Step 10).
 
 ### Step 10: Done
 
