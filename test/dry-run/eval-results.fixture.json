@@ -1,0 +1,76 @@
+{
+  "description": "Scripted evaluator sequence for dry-run. Feed these returns to the Backend Evaluator (in order) instead of running real tests. The sequence exercises: (1) graduated re-evaluation strategy selection (full → component-scoped → full), and (2) oscillation detection — the same signature appears at call 1, resolves at call 2, and reappears at call 3.",
+  "strategyLogic": {
+    "note": "Strategy is determined by iterations[component] at the time of the eval call.",
+    "rules": [
+      "iterations[component] == 1 → full",
+      "iterations[component] == 2 → component-scoped",
+      "iterations[component] == 3 → full (final safety net)"
+    ]
+  },
+  "sequence": [
+    {
+      "call": 1,
+      "strategy": "full",
+      "iterationsAtCallTime": { "OrderService": 1 },
+      "strategyReason": "iterations[OrderService] == 1 → full",
+      "overall": "fail",
+      "results": [
+        {
+          "component": "OrderService",
+          "status": "fail",
+          "signatures": ["xunit:OrderTests.Total_AppliesDiscount"]
+        },
+        {
+          "component": "PaymentService",
+          "status": "pass",
+          "signatures": []
+        }
+      ]
+    },
+    {
+      "call": 2,
+      "strategy": "component-scoped",
+      "iterationsAtCallTime": { "OrderService": 2 },
+      "strategyReason": "iterations[OrderService] == 2 → component-scoped",
+      "overall": "fail",
+      "results": [
+        {
+          "component": "OrderService",
+          "status": "pass",
+          "signatures": []
+        },
+        {
+          "component": "PaymentService",
+          "status": "fail",
+          "signatures": ["xunit:PaymentTests.Refund_NegativeAmount"]
+        }
+      ]
+    },
+    {
+      "call": 3,
+      "strategy": "full",
+      "iterationsAtCallTime": { "OrderService": 3 },
+      "strategyReason": "iterations[OrderService] == 3 → full",
+      "overall": "fail",
+      "results": [
+        {
+          "component": "OrderService",
+          "status": "fail",
+          "signatures": ["xunit:OrderTests.Total_AppliesDiscount"]
+        },
+        {
+          "component": "PaymentService",
+          "status": "pass",
+          "signatures": []
+        }
+      ]
+    }
+  ],
+  "oscillationTrace": {
+    "signature": "xunit:OrderTests.Total_AppliesDiscount",
+    "call1": "present (fail)",
+    "call2": "absent (resolved — OrderService passed in component-scoped eval)",
+    "call3": "reappears (fail) → OSCILLATION DETECTED"
+  }
+}

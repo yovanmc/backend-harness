@@ -1,0 +1,19 @@
+{
+  "description": "Expected end-state of plans/harness-state.json after the 3-call dry-run sequence. Use this as the assertion target.",
+  "phase": "escalated",
+  "evaluation": {
+    "lastStrategy": "full"
+  },
+  "iterations": {
+    "OrderService": 3
+  },
+  "escalation": {
+    "reason": "oscillation",
+    "detail": "OrderService <-> PaymentService coupling detected",
+    "signatures": [
+      "xunit:OrderTests.Total_AppliesDiscount"
+    ],
+    "components": ["OrderService", "PaymentService"],
+    "iteration": 3
+  }
+}
