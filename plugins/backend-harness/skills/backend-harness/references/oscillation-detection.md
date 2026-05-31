@@ -40,11 +40,11 @@ When oscillation is detected at iteration N:
        "signatures": [
          "xunit:OrderTests.Total_AppliesDiscount",
          "xunit:PaymentTests.Refund_NegativeAmount"
-       ],
-       "iteration": 3
+       ]
      }
    }
    ```
+   The `failureHistory` entries include iteration numbers for debugging — no separate `iteration` field is needed in `escalation`.
 3. **Surface to user** — explicitly identify which signatures and components are cycling, so the human can see the architectural coupling
 
 ## Rationale
@@ -99,4 +99,4 @@ The following `failureHistory` sequence triggers oscillation detection:
 
 - Signature computation must be deterministic and stable across runs (use framework + test name)
 - The oscillation check is O(n^2) in worst case (for each failure, check if it appeared earlier), but n is small (max 3 iterations, typically 1–2 failures per iteration), so performance is not a concern
-- Record the iteration where oscillation was detected in the `escalation` object for debugging and reporting
+- The `failureHistory` entries already carry iteration numbers; do not add a redundant `iteration` field to the `escalation` object

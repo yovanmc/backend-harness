@@ -2,8 +2,6 @@
 description: Scope a backend feature into a spec/plan, then suggest /harness-implement.
 ---
 
-Invoke the `backend-harness` skill in BRAINSTORM mode.
-
 Run superpowers `brainstorming` then superpowers `writing-plans` to produce a
 plan at `plans/<date>-<topic>-plan.md`. This plan is the spec the harness builds
 against.

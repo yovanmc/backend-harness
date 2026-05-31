@@ -56,6 +56,7 @@ Read `plans/harness-state.json` if it exists.
 - If `phase` is `escalated`: tell the user — "Previous run ended in escalation: [escalation.reason]. Review plans/harness-state.json for details. To restart, delete plans/harness-state.json." — and **stop**.
 - If `phase` is `done`: the run is already complete. Tell the user and stop.
 - If `phase` is `implement`, `evaluate`, or `fix`: resume at that phase — skip all prior steps.
+  - `phase=evaluate` → resume at **Step 5** (Backend Evaluation) — all tasks are complete; begin functional testing.
   - `phase=fix` → resume at **Step 5** (Backend Evaluation) — the fix was already applied; re-evaluate.
 - If `phase` is `brief`: Step 2 (worktree) did not yet complete. Resume from **Step 2**, not Step 3.
 - If no state file exists: start fresh. Generate a new `runId` (UUID v4), set `phase=brief`, set `createdAt` and `updatedAt` to the current ISO 8601 timestamp, initialise `tasks`, `failureHistory`, `iterations`, `escalation`, and `planPath` per `references/state-schema.md`. Set `planPath` to `"plans/<matched-plan-filename>.md"` using the plan file located during the Preflight plan check. Persist.
@@ -114,6 +115,11 @@ Determine the strategy **per failing component** (not via a single max across al
 For each failing component, apply the per-component rule from `references/graduated-reevaluation.md`:
 
 ```
+Special case: if state.evaluation.lastStrategy == "component-scoped" AND last overall == "pass":
+  strategy = "full"
+  scope = "full"
+  (Skip the per-component rule below — this overrides it.)
+
 for each failing component C:
   if state.iterations[C] == 0:
     → C requires "full" scope  (first failure, no fixes dispatched yet)
@@ -126,7 +132,7 @@ for each failing component C:
 
 If ANY failing component requires "full" scope:
   strategy = "full"
-  scope = "all"
+  scope = "full"
 Else if ALL previously-failing components have iterations[C] == 1:
   strategy = "component-scoped"
   scope = [list of failing component names]
@@ -136,7 +142,7 @@ Dispatch `prompts/backend-evaluator.md` with:
 - `worktree` — absolute worktree path from `state.worktree`
 - `config` — the parsed `harness.config.json` (commands: unit, integration, apiVerify)
 - `strategy` — `"full"` or `"component-scoped"`
-- `scope` — `"all"` when strategy is `"full"`, or the array of failing component names when strategy is `"component-scoped"`
+- `scope` — `"full"` when strategy is `"full"`, or the array of failing component names when strategy is `"component-scoped"`
 
 Parse the evaluator's JSON response (field: `results[]`).
 
@@ -210,8 +216,8 @@ For each failing component that has not hit the 3-iteration cap:
    - `spec` — the relevant section of the plan text describing this component's expected behaviour
    - `commands` — unit and integration test commands from `harness.config.json`
 3. Parse the fix agent's JSON response:
-   - `DONE` → record `commitSha` in state; continue to next failing component
-   - `DONE_WITH_CONCERNS` → record `commitSha` and the `concerns` text; continue
+   - `DONE` → note `commitSha` in the orchestrator's output (for user visibility); do NOT persist it to `harness-state.json` — the state schema has no field for fix-iteration commit SHAs; continue to next failing component
+   - `DONE_WITH_CONCERNS` → note `commitSha` and the `concerns` text in the orchestrator's output; do NOT persist to state; continue
    - `NEEDS_CONTEXT` → provide the requested context and re-dispatch once; if still `NEEDS_CONTEXT`, treat as `BLOCKED`
    - `BLOCKED` → set `state.phase=escalated`, `state.escalation = { "reason": "blocked", "detail": concerns, "signatures": [signatures] }`, persist, tell the user
 4. If `regressionCheck == "FAIL"`: note the regressions — they will appear in the next evaluation's results and will be caught by the oscillation check if they cycle.
@@ -228,7 +234,7 @@ This step runs once all components report `status == "pass"` in the functional e
 
 Per `references/mutation-gate.md`:
 
-1. Run `state.commands.mutation` — read this value from `harness.config.json` field `commands.mutation`. Never hardcode the mutation command.
+1. Read `commands.mutation` from `harness.config.json` in the target repo root. Never hardcode the mutation command.
 2. For each changed file in the worktree, determine its tier:
    - Match against `harness.config.json` `fileTierGlobs` patterns in order (validators → services → controllers)
    - Use the first matching tier; if no glob matches, default to the lowest configured threshold

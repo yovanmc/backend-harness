@@ -32,6 +32,21 @@ After each evaluation runs, the chosen strategy is recorded in `evaluation.lastS
 
 ## Strategy Selection Logic
 
+**Special Case — Force Full After Component-Scoped Pass**
+
+Before applying the per-component rule, check this condition first:
+
+```
+if evaluation.lastStrategy == "component-scoped" AND last overall result == "pass":
+  strategy = "full"
+  scope = "full"
+  # Skip the per-component rule below — this overrides it.
+```
+
+This ensures a regression sweep after a narrow-scoped clean pass. A component-scoped evaluation only checks the components in its scope — it cannot see regressions in components that were excluded. If that narrow pass returns `overall: "pass"`, the next evaluation must be full to catch any breakage that was out of scope.
+
+**Per-Component Rule**
+
 ```
 if iterations[component] == 0:
   strategy = "full"
@@ -83,6 +98,9 @@ Scenario: The `OrderService` component is failing the test `xunit:OrderTests.Tot
 - `iterations[OrderService]` = 2 (at this call; incremented after call 1)
 - `evaluation.lastStrategy` = `"full"`
 - Phase: transitions to `evaluate` (move to mutation gate), exit the loop
+
+**Why call 3 is full even though `iterations[OrderService]` is still 1:**
+The Special Case rule applies here. After iteration 1's component-scoped evaluation returned `overall: "pass"`, `evaluation.lastStrategy` is `"component-scoped"` and the last overall result was `"pass"`. This triggers the force-full override before the per-component rule is even consulted — the next evaluation must be full to sweep for regressions in the components that were excluded from scope.
 
 ## When the Cap is Reached
 

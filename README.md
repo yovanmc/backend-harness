@@ -36,6 +36,7 @@ Replace `/absolute/path/to/backend-harness` with the absolute path where you clo
 3. Adjust `mutationThresholds` if needed (defaults: validators 80%, services 70%, controllers 60%)
 4. Adjust `fileTierGlobs` patterns to match your project's file structure
 5. Refer to `plugins/backend-harness/skills/backend-harness/references/stack-config.md` for full field documentation and stack-swap examples (Node.js, Go, Python, etc.)
+6. Add `plans/` to your `.gitignore` — this directory contains ephemeral run state (`harness-state.json`) that should not be committed.
 
 ## Use
 
