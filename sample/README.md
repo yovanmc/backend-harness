@@ -22,8 +22,8 @@ When the demo feature modifies `PaymentService.cs`, the harness's mutation gate 
 
 ## Prerequisites
 
-- `~/.dotnet/dotnet` — .NET SDK 10
-- Stryker.NET: `~/.dotnet/dotnet tool install -g dotnet-stryker`
+- .NET SDK 10, with `dotnet` on your `PATH` (if your SDK is in a non-standard location, see [Troubleshooting](#troubleshooting-dotnet-not-on-path) below)
+- Stryker.NET: `dotnet tool install -g dotnet-stryker`
 - The [`backend-harness`](../) plugin installed (see the root README)
 - The `superpowers` plugin installed (the harness's inner loop depends on it)
 
@@ -33,16 +33,16 @@ You can confirm the seeds are real before involving the harness. Run from `sampl
 
 ```bash
 # Functional seed: exactly one RED unit test
-~/.dotnet/dotnet test --filter Category=Unit
+dotnet test --filter Category=Unit
 # Expected: 3 passed, 1 failed — the failure is OrderServiceTests.Total_AppliesDiscount
 
 # Integration tests are green
-~/.dotnet/dotnet test --filter Category=Integration
+dotnet test --filter Category=Integration
 # Expected: all pass
 
 # Mutation seed: PaymentService.cs below the 70% services threshold
 # (Stryker needs a green baseline — see "Confirming the mutation seed" below)
-~/.dotnet/dotnet stryker
+dotnet stryker
 # Expected: report shows PaymentService.cs mutation score < 70%
 
 # API smoke check
@@ -53,10 +53,11 @@ You can confirm the seeds are real before involving the harness. Run from `sampl
 > **Confirming the mutation seed in isolation:** Stryker requires a passing test baseline to determine which mutants are killed, but the functional seed keeps the unit suite RED. To measure the mutation seed cleanly, temporarily apply the discount fix, run Stryker, then restore the seeded bug:
 > ```bash
 > sed -i.bak 's/return subtotal + discount;/return subtotal - discount;/' src/OrdersApi/Services/OrderService.cs
-> ~/.dotnet/dotnet test --filter Category=Unit   # now all green
-> ~/.dotnet/dotnet stryker                        # PaymentService.cs < 70%
+> dotnet test --filter Category=Unit   # now all green
+> dotnet stryker                        # PaymentService.cs < 70%
 > mv src/OrdersApi/Services/OrderService.cs.bak src/OrdersApi/Services/OrderService.cs
-> ~/.dotnet/dotnet test --filter Category=Unit   # RED again — seed restored
+> dotnet build src/OrdersApi/OrdersApi.csproj   # force recompile so the restored bug is rebuilt
+> dotnet test --filter Category=Unit   # RED again — seed restored
 > ```
 
 ## Running the end-to-end demonstration
@@ -75,7 +76,7 @@ A human observing the run should see, in order:
 4. **Fix Agent fixes the discount bug** (`subtotal - discount`); `iterations[OrderService]` becomes 1.
 5. **Component-scoped re-eval of `OrderService` passes**; per the force-full rule, the next evaluation is full.
 6. **Full regression eval passes** — all functional tests green.
-7. **Mutation gate runs** on the changed `PaymentService.cs`; kill-rate is below 70% → **gate trips**; `iterations[PaymentService]` becomes 1.
+7. **Mutation gate runs.** Stryker mutates the whole project and writes a per-file JSON report; the harness reads the score for each *changed* file and applies the tiered thresholds. For the changed `PaymentService.cs` (a `services`-tier file), the per-file kill-rate is ~46% — below 70% → **gate trips**; `iterations[PaymentService]` becomes 1.
 8. **Fix Agent adds edge-case tests** for the untested guard branches; the mutation gate re-runs and **passes** (≥ 70%).
 9. **`plans/harness-state.json` reaches `"phase": "done"`**; `superpowers:finishing-a-development-branch` runs.
 
@@ -85,9 +86,9 @@ The run is a success when **both gates demonstrably fired** — one functional f
 
 Exact iteration counts depend on live subagent behavior; the acceptance bar is *the gates firing and convergence to `done`*, not a byte-exact state match.
 
-## Troubleshooting: Stryker can't find .NET
+## Troubleshooting: dotnet not on PATH
 
-Stryker.NET ships as a `net8.0` tool and shells out to a bare `dotnet`. If your SDK is installed in a non-standard location (e.g. `~/.dotnet` rather than `/usr/local/share/dotnet`), `dotnet stryker` may fail with *"You must install .NET to run this application"* or *"start process 'dotnet' ... No such file or directory"*. Fix it by pointing Stryker at the SDK and putting `dotnet` on `PATH`:
+All commands here (and the harness's `harness.config.json`) assume `dotnet` resolves on your `PATH`. If your SDK is installed in a non-standard location (e.g. `~/.dotnet` rather than `/usr/local/share/dotnet`), commands may fail — and Stryker.NET (a `net8.0` tool that shells out to a bare `dotnet`) will report *"You must install .NET to run this application"* or *"start process 'dotnet' ... No such file or directory"*. Put the SDK and its tools on `PATH` and point `DOTNET_ROOT` at it:
 
 ```bash
 export DOTNET_ROOT="$HOME/.dotnet"

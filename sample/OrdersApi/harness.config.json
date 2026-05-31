@@ -1,9 +1,9 @@
 {
   "stack": "dotnet",
   "commands": {
-    "unit": "~/.dotnet/dotnet test --filter Category=Unit",
-    "integration": "~/.dotnet/dotnet test --filter Category=Integration",
-    "mutation": "~/.dotnet/dotnet stryker",
+    "unit": "dotnet test --filter Category=Unit",
+    "integration": "dotnet test --filter Category=Integration",
+    "mutation": "dotnet stryker",
     "apiVerify": "./scripts/api-smoke.sh"
   },
   "mutationThresholds": {
