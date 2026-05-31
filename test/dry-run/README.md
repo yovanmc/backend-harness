@@ -7,7 +7,7 @@ This dry-run exercises the outer loop logic of the backend-harness orchestrator 
 **What it proves:**
 
 - **Disk-state persistence:** `plans/harness-state.json` is written and updated at each step, surviving any context compaction during the session.
-- **Graduated re-evaluation strategy selection:** The orchestrator selects `"full"` on call 1 (`iterations[OrderService] == 1`), `"component-scoped"` on call 2 (`iterations[OrderService] == 2`), and `"full"` again on call 3 (`iterations[OrderService] == 3`).
+- **Graduated re-evaluation strategy selection:** The orchestrator selects `"full"` on call 1 (`iterations[OrderService] == 0`), `"component-scoped"` on call 2 (`iterations[OrderService] == 1`), and `"full"` again on call 3 (`iterations[OrderService] == 1`).
 - **Oscillation detection triggering before the 3-iteration cap:** The signature `xunit:OrderTests.Total_AppliesDiscount` appears at call 1, resolves at call 2, and reappears at call 3. The oscillation check runs before the cap check and stops the run immediately.
 - **Correct `phase=escalated` final state:** The harness writes `escalation.reason = "oscillation"` and stops without dispatching another fix attempt.
 
@@ -28,11 +28,10 @@ This dry-run requires manual injection of canned evaluator results at each dispa
 3. The harness will proceed through the `brief` and `implement` phases normally, then enter the `evaluate` phase and dispatch the Backend Evaluator.
 4. **Intercept the first evaluator dispatch:** instead of letting it run real commands, paste the result from `sequence[0]` in `eval-results.fixture.json` as the evaluator's response. Specifically, return `overall: "fail"` with OrderService failing on `xunit:OrderTests.Total_AppliesDiscount`.
 5. The orchestrator will record this failure, increment `iterations[OrderService]` to 1, and dispatch the Fix Agent for OrderService.
-6. After the Fix Agent completes, the orchestrator dispatches the Backend Evaluator again with strategy `"component-scoped"`.
-7. **Intercept the second evaluator dispatch:** paste the result from `sequence[1]`. Return `overall: "fail"` with OrderService passing but PaymentService failing on `xunit:PaymentTests.Refund_NegativeAmount`.
-8. The orchestrator increments `iterations[OrderService]` to 2 and dispatches the Fix Agent for PaymentService.
-9. After that fix, the orchestrator dispatches the Backend Evaluator a third time with strategy `"full"`.
-10. **Intercept the third evaluator dispatch:** paste the result from `sequence[2]`. Return `overall: "fail"` with OrderService failing again on `xunit:OrderTests.Total_AppliesDiscount`.
+6. After the Fix Agent completes, the orchestrator dispatches the Backend Evaluator again with strategy `"component-scoped"` (scope: OrderService only).
+7. **Intercept the second evaluator dispatch:** paste the result from `sequence[1]`. Return `overall: "pass"` with OrderService passing. No fix is needed after this.
+8. The orchestrator runs a full regression eval (graduated re-eval: after component-scoped pass → full check) and dispatches the Backend Evaluator a third time with strategy `"full"`.
+9. **Intercept the third evaluator dispatch:** paste the result from `sequence[2]`. Return `overall: "fail"` with OrderService failing again on `xunit:OrderTests.Total_AppliesDiscount` (same signature as call 1).
 11. The orchestrator should detect oscillation (same signature appeared, resolved, reappeared within the same `runId`) and stop immediately.
 
 **Note:** This dry-run requires manual intervention at each evaluator dispatch to inject canned results. A future improvement could automate this via a mock evaluator config option in `harness.config.json`.
@@ -47,7 +46,7 @@ After the third evaluator response is injected:
   - `"phase": "escalated"`
   - `"escalation.reason": "oscillation"`
   - `"xunit:OrderTests.Total_AppliesDiscount"` in `escalation.signatures`
-  - `"iterations": { "OrderService": 3 }`
+  - `"iterations": { "OrderService": 1 }`
   - `"evaluation.lastStrategy": "full"`
 
 The full expected state is in `harness-state.fixture.json`.
