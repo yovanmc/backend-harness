@@ -1,12 +1,12 @@
 # Backend Harness
 
-Autonomous backend SDLC harness layered on superpowers' `subagent-driven-development`. The harness adds the production-hardening outer loop that superpowers' inner loop lacks. The outer loop enforces eight critical quality mechanisms: disk-state persistence (compaction resilience), conditional Context Brief (codebase orientation for brownfield projects), independent backend evaluation (structural bias elimination), graduated re-evaluation (cost vs. regression coverage), tiered Stryker mutation gate (configurable thresholds by file type), oscillation detection (cyclic failure escalation), and 3-iteration cap with human escalation.
+Autonomous backend SDLC harness layered on superpowers' `subagent-driven-development`. The harness adds the production-hardening outer loop that superpowers' inner loop lacks. The outer loop enforces key quality mechanisms: disk-state persistence (compaction resilience), conditional Context Brief (codebase orientation for brownfield projects), independent backend evaluation (structural bias elimination), graduated re-evaluation (cost vs. regression coverage), tiered Stryker mutation gate (configurable thresholds by file type), oscillation detection (cyclic failure escalation), and 3-iteration cap with human escalation.
 
 ## Prerequisites
 
 - **superpowers plugin** — Required for the inner loop: `subagent-driven-development`, `using-git-worktrees`, `finishing-a-development-branch`
 - **Target repository** with `harness.config.json` configured (see [Configure](#configure))
-- **Reference stack (.NET)** requires:
+- **For the reference stack (.NET):**
   - .NET SDK 8+
   - Stryker.NET installed as a dotnet tool: `dotnet tool install -g dotnet-stryker`
   - Tests using xUnit category traits: `[Trait("Category", "Unit")]` and `[Trait("Category", "Integration")]`
@@ -57,7 +57,7 @@ Run `/harness-brainstorm` first to produce a plan file at `plans/<date>-<topic>-
    - Worktree creation (isolated branch via superpowers `using-git-worktrees`)
    - Conditional Context Brief (codebase orientation for non-trivial projects only)
    - Per-task implementation via superpowers `subagent-driven-development`
-   - Backend evaluation (xUnit unit tests + integration tests + curl API smoke tests)
+   - Backend evaluation (unit tests + integration tests + API smoke — commands declared in harness.config.json)
    - Graduated re-evaluation (full scope on early failures, component-scoped on iteration 2, 3-iteration cap)
    - Oscillation detection (escalates on cyclic failures between components)
    - Tiered Stryker mutation gate (validators 80%, services 70%, controllers 60% — configurable by tier)
