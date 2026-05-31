@@ -1,0 +1,8 @@
+# Build output
+bin/
+obj/
+# Stryker output
+StrykerOutput/
+# Harness runtime state (the demo plan itself IS committed; these are generated)
+plans/harness-state.json
+plans/context-brief.md
