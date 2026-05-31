@@ -85,6 +85,17 @@ The run is a success when **both gates demonstrably fired** — one functional f
 
 Exact iteration counts depend on live subagent behavior; the acceptance bar is *the gates firing and convergence to `done`*, not a byte-exact state match.
 
+## Troubleshooting: Stryker can't find .NET
+
+Stryker.NET ships as a `net8.0` tool and shells out to a bare `dotnet`. If your SDK is installed in a non-standard location (e.g. `~/.dotnet` rather than `/usr/local/share/dotnet`), `dotnet stryker` may fail with *"You must install .NET to run this application"* or *"start process 'dotnet' ... No such file or directory"*. Fix it by pointing Stryker at the SDK and putting `dotnet` on `PATH`:
+
+```bash
+export DOTNET_ROOT="$HOME/.dotnet"
+export PATH="$HOME/.dotnet:$HOME/.dotnet/tools:$PATH"
+```
+
+This is only needed for non-standard SDK locations; a default install resolves automatically.
+
 ## Note on determinism
 
 This is a live, human-observed run, and subagent fix quality varies. If the harness escalates instead (e.g. oscillation detection or the 3-iteration cap), that is **also a valid observation** — it demonstrates the harness's safety behavior. Review `plans/harness-state.json` to see what happened and why.
