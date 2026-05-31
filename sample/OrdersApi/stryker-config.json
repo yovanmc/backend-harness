@@ -1,0 +1,8 @@
+{
+  "stryker-config": {
+    "project": "OrdersApi.csproj",
+    "test-projects": ["tests/OrdersApi.Tests/OrdersApi.Tests.csproj"],
+    "reporters": ["json", "progress"],
+    "thresholds": { "high": 80, "low": 60, "break": 0 }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "stack": "dotnet",
+  "commands": {
+    "unit": "~/.dotnet/dotnet test --filter Category=Unit",
+    "integration": "~/.dotnet/dotnet test --filter Category=Integration",
+    "mutation": "~/.dotnet/dotnet stryker",
+    "apiVerify": "./scripts/api-smoke.sh"
+  },
+  "mutationThresholds": {
+    "validators": 80,
+    "services": 70,
+    "controllers": 60
+  },
+  "fileTierGlobs": {
+    "validators": ["**/Validators/**/*.cs", "**/*Validator.cs"],
+    "services": ["**/Services/**/*.cs", "**/*Service.cs"],
+    "controllers": ["**/Controllers/**/*.cs", "**/*Controller.cs"]
+  }
+}
