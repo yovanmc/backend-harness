@@ -68,6 +68,10 @@ Run `/harness-brainstorm` first to produce a plan file at `plans/<date>-<topic>-
 
 4. **Structural bias elimination** — The implementer (inner loop) never sees evaluator output. The `backend-evaluator` subagent runs independently and reports only to the orchestrator. Evaluation feedback does not flow back into the implementer's context.
 
+## Try it on the sample app
+
+A ready-to-run brownfield .NET sample lives in [`sample/OrdersApi`](sample/OrdersApi). It is seeded with a real bug (caught by a failing xUnit test) and a thinly-tested service (low Stryker kill-rate) so you can watch the harness's fix loop and mutation gate fire end-to-end. See [`sample/README.md`](sample/README.md) for the walkthrough and expected convergence trace.
+
 ## Swapping Stacks
 
 To adapt to a different stack (Node.js, Go, Python, etc.), edit only the `commands` block and `fileTierGlobs` in `harness.config.json` in your target repository. No orchestration code changes are needed. Refer to `plugins/backend-harness/skills/backend-harness/references/stack-config.md` for examples and field reference.
