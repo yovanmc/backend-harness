@@ -1,5 +1,8 @@
 # Backend Harness
 
+[![CI](https://github.com/yovanmc/backend-harness/actions/workflows/ci.yml/badge.svg)](https://github.com/yovanmc/backend-harness/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Autonomous backend SDLC harness layered on superpowers' `subagent-driven-development`. The harness adds the production-hardening outer loop that superpowers' inner loop lacks. The outer loop enforces key quality mechanisms: disk-state persistence (compaction resilience), conditional Context Brief (codebase orientation for brownfield projects), independent backend evaluation (structural bias elimination), graduated re-evaluation (cost vs. regression coverage), tiered Stryker mutation gate (configurable thresholds by file type), oscillation detection (cyclic failure escalation), and 3-iteration cap with human escalation.
 
 ## Prerequisites

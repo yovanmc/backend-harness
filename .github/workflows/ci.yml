@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gate-tests:
+    # The harness's own logic: the line-level diff-scoped mutation gate.
+    name: Mutation-gate unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run diff-scope-mutation unit tests
+        working-directory: plugins/backend-harness/skills/backend-harness/scripts
+        run: python -m unittest test_diff_scope_mutation -v
+
+  sample:
+    # The .NET validation fixture. NOTE: the unit suite intentionally ships one
+    # RED test (the seeded OrderService discount bug), so it is NOT run as a
+    # pass gate here. We build the solution (compile check) and run the
+    # integration suite, which is green. The seeded bug and the mutation seed
+    # are verified deterministically per sample/README.md ("Verifying the seeds").
+    name: Sample build + integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Build sample
+        working-directory: sample/OrdersApi
+        run: dotnet build
+      - name: Run integration tests
+        working-directory: sample/OrdersApi
+        run: dotnet test --filter Category=Integration

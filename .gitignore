@@ -1,0 +1,15 @@
+# .NET build output
+bin/
+obj/
+
+# Stryker mutation testing output
+StrykerOutput/
+
+# Harness runtime state (ephemeral per-run bookkeeping)
+plans/harness-state.json
+plans/harness-state.tmp.json
+plans/context-brief.md
+
+# OS / editor cruft
+.DS_Store
+*.swp
