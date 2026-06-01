@@ -1,0 +1,28 @@
+{
+  "name": "backend-harness",
+  "version": "0.1.0",
+  "description": "Autonomous backend SDLC harness with state persistence, independent evaluation, graduated re-evaluation, mutation gating, and oscillation detection.",
+  "author": {
+    "name": "Yovan Collins",
+    "url": "https://github.com/yovanmc"
+  },
+  "homepage": "https://github.com/yovanmc/backend-harness",
+  "repository": "https://github.com/yovanmc/backend-harness",
+  "license": "MIT",
+  "keywords": ["sdlc", "orchestration", "subagents", "mutation-testing", "dotnet"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Backend Harness",
+    "shortDescription": "Backend SDLC orchestration with quality gates",
+    "longDescription": "Autonomous backend feature implementation harness layered on Superpowers. It persists run state, isolates worktrees, runs independent backend evaluation, applies graduated re-evaluation, enforces mutation quality gates, and escalates on oscillation or iteration caps.",
+    "developerName": "Yovan Collins",
+    "category": "Productivity",
+    "capabilities": ["Write", "Interactive"],
+    "websiteURL": "https://github.com/yovanmc/backend-harness",
+    "defaultPrompt": [
+      "Use $backend-harness to brainstorm a backend feature plan.",
+      "Use $backend-harness to implement the current plan with subagents and quality gates."
+    ],
+    "brandColor": "#2563EB"
+  }
+}
