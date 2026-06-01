@@ -1,0 +1,7 @@
+interface:
+  display_name: "Backend Harness"
+  short_description: "Backend SDLC quality gate harness"
+  default_prompt: "Use $backend-harness to implement the current backend plan with subagents and quality gates."
+
+policy:
+  allow_implicit_invocation: true

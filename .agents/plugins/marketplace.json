@@ -1,0 +1,20 @@
+{
+  "name": "backend-harness-local",
+  "interface": {
+    "displayName": "Backend Harness Local"
+  },
+  "plugins": [
+    {
+      "name": "backend-harness",
+      "source": {
+        "source": "local",
+        "path": "./plugins/backend-harness"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

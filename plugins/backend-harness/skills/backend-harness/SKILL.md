@@ -1,11 +1,16 @@
 ---
 name: backend-harness
-description: Use when autonomously implementing a backend feature plan with enforced quality gates — drives an outer loop (state persistence, backend evaluation, graduated re-evaluation, tiered mutation gating, oscillation detection, iteration cap) over superpowers subagent-driven-development.
+description: Use when brainstorming or autonomously implementing backend feature plans with enforced quality gates; drives state persistence, worktree isolation, independent backend evaluation, graduated re-evaluation, tiered mutation gating, oscillation detection, and iteration-cap escalation over Superpowers subagent-driven-development.
 ---
 
 ## Overview
 
-This skill is the **outer loop** of the backend-harness orchestration pipeline.
+This skill is the **outer loop** of the backend-harness orchestration pipeline. It supports two entry modes:
+
+- **Brainstorm mode:** scope a backend feature into a plan under `plans/<date>-<topic>-plan.md`.
+- **Implement mode:** execute an approved plan through the quality-gated outer loop below.
+
+Claude users may use `/harness-brainstorm` and `/harness-implement`. Codex users should invoke the same modes with natural prompts such as "Use backend-harness to brainstorm a backend feature plan" or "Use backend-harness to implement the current plan with subagents and quality gates."
 
 `superpowers:subagent-driven-development` is the **inner loop** — it handles the implement → spec review → quality review cycle for each task in an isolated worktree. This skill drives that inner loop from the outside: managing state, evaluating results, detecting failure patterns, gating on mutation quality, and escalating when autonomous progress is no longer possible.
 
@@ -17,33 +22,61 @@ See `references/state-schema.md` for the canonical state schema — all field na
 
 ---
 
+## Mode Selection
+
+### Brainstorm mode
+
+Use this mode when no approved plan exists yet.
+
+1. Use `superpowers:brainstorming` to clarify the backend feature, constraints, and acceptance criteria.
+2. Use `superpowers:writing-plans` to write the implementation plan under `plans/<date>-<topic>-plan.md`.
+3. Stop after the plan is written and reviewed; do not enter Implement mode until the user approves the plan.
+
+### Implement mode
+
+Use this mode when the target repository already has an approved `plans/*.md` file. Run the Preflight and Outer Loop Procedure below.
+
+---
+
 ## Preflight
 
-Run these three checks before entering the loop. Stop immediately with the stated message if any check fails.
+Run these checks before entering the loop. Stop immediately with the stated message if any check fails.
 
 ### a) Superpowers dependency check
 
-The `superpowers` plugin is required. This skill invokes `superpowers:subagent-driven-development`, `superpowers:using-git-worktrees`, and `superpowers:finishing-a-development-branch`. Without it, the inner loop cannot run.
+The `superpowers` plugin is required. This skill uses `superpowers:brainstorming`, `superpowers:writing-plans`, `superpowers:subagent-driven-development`, `superpowers:using-git-worktrees`, and `superpowers:finishing-a-development-branch`. Without it, the complete harness cannot run.
 
 Check that the superpowers plugin is installed. If it is not:
 
-> "superpowers plugin is required. Install it first, then re-run /harness-implement."
+> "superpowers plugin is required. Install it first, then re-run backend-harness."
 
-### b) Config check
+### b) Subagent authorization check
+
+Implement mode relies on independent subagents for the Context Brief, backend evaluator, per-task implementation, and targeted fixes. This is required for structural bias elimination.
+
+- If the user explicitly asked for subagents, continue.
+- If the current agent environment requires explicit user authorization for subagents and the user did not grant it, ask once before continuing.
+- If subagents are unavailable, stop with:
+
+> "backend-harness requires subagents for independent implementation and evaluation. Re-run with subagents enabled, or use manual single-agent implementation outside this harness."
+
+### c) Config check
 
 The `harness.config.json` must exist in the current working directory (the target repository root). It declares the commands the orchestrator will call — unit tests, integration tests, mutation testing, and API verification. The orchestrator will not proceed without it.
 
 If `harness.config.json` is absent:
 
-> "No harness.config.json found. Copy templates/harness.config.json from the plugin into your repo and edit it for your stack. See references/stack-config.md."
+> "No harness.config.json found. Copy assets/templates/harness.config.json from the backend-harness skill into your repo and edit it for your stack. See references/stack-config.md."
 
-### c) Plan check
+Before executing any command from `harness.config.json`, inspect the parsed command values. Do not run suspicious, destructive, network-exfiltrating, or unrelated commands. Respect sandbox/permission prompts; if an expected command is blocked by the host environment, report the blocked command and stop rather than bypassing approval.
+
+### d) Plan check
 
 At least one `plans/*.md` file must exist in the current working directory. The plan drives the entire run.
 
 If no plan file is found under `plans/`:
 
-> "No plan found under plans/. Run /harness-brainstorm first to create a spec/plan, then re-run /harness-implement."
+> "No plan found under plans/. Run backend-harness in Brainstorm mode first to create a spec/plan, then re-run Implement mode."
 
 ---
 
@@ -149,7 +182,7 @@ Parse the evaluator's JSON response (field: `results[]`).
 **If the response contains an `error` field and empty `results`:** this is a tooling failure, not a test failure.
 - Set `state.phase = "escalated"`
 - Set `state.escalation = { "reason": "blocked", "detail": "Evaluator tooling error: <error field value>", "signatures": [] }`
-- Persist, then tell the user — "Evaluation command failed: [error]. Fix the tooling issue and re-run /harness-implement." — and **stop**.
+- Persist, then tell the user — "Evaluation command failed: [error]. Fix the tooling issue and re-run Implement mode." — and **stop**.
 
 For each entry in `results` where `status == "fail"`:
 - Append entries to `state.failureHistory`: `{ iteration: state.iterations[component] ?? 0, signature: sig, component: component }` for each signature in `results[].signatures`
@@ -273,7 +306,7 @@ All functional tests pass (unit + integration + apiVerify) AND the mutation gate
 
 | Step | File | Purpose |
 |---|---|---|
-| Preflight b | `templates/harness.config.json` / `references/stack-config.md` | Config validation and command declarations |
+| Preflight c | `assets/templates/harness.config.json` / `references/stack-config.md` | Config validation and command declarations |
 | Step 3 | `prompts/context-brief.md` | Context Brief generation for non-trivial codebases |
 | Step 4 | superpowers `subagent-driven-development` | Inner per-task implement → review → quality loop |
 | Step 5 | `prompts/backend-evaluator.md`, `references/graduated-reevaluation.md` | Functional evaluation and strategy selection |
@@ -294,6 +327,7 @@ Never do these:
 - **Never continue past oscillation.** When oscillation is detected, stop and escalate. Do not consume remaining iterations.
 - **Never exceed the 3-iteration cap silently.** If `state.iterations[component] >= 3`, escalate with `reason: "cap_exceeded"` — do not dispatch the fix agent again.
 - **Never call hardcoded tool names or test commands.** Always use the commands declared in `harness.config.json` (`commands.unit`, `commands.integration`, `commands.mutation`, `commands.apiVerify`).
+- **Never run unreviewed config commands.** Inspect `harness.config.json` before execution and stop on destructive, suspicious, or unrelated command values.
 - **Never run on main/master without worktree isolation.** All work happens in the isolated worktree created in Step 2. Defer to `superpowers:using-git-worktrees`.
 - **Never write `harness-state.json` directly.** Always write to `plans/harness-state.tmp.json` first, then atomically rename: `mv plans/harness-state.tmp.json plans/harness-state.json`. See `references/state-schema.md` Section 5.
 - **Never start a fresh run if an incomplete run exists.** Always perform the resume check (Step 1) first. If a state file exists with a non-terminal phase, resume — do not overwrite.

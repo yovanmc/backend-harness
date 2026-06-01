@@ -9,12 +9,13 @@ Autonomous backend SDLC harness layered on superpowers' `subagent-driven-develop
 
 - **superpowers plugin** — Required for the inner loop: `subagent-driven-development`, `using-git-worktrees`, `finishing-a-development-branch`
 - **Target repository** with `harness.config.json` configured (see [Configure](#configure))
+- **Subagent support enabled** — Required for independent context briefing, implementation, evaluation, and fix loops
 - **For the reference stack (.NET):**
   - .NET SDK 8+
   - Stryker.NET installed as a dotnet tool: `dotnet tool install -g dotnet-stryker`
   - Tests using xUnit category traits: `[Trait("Category", "Unit")]` and `[Trait("Category", "Integration")]`
 
-## Install (Local Marketplace)
+## Install For Claude Code
 
 Register the marketplace and install the plugin:
 
@@ -28,9 +29,25 @@ claude plugin install backend-harness@backend-harness-marketplace
 
 Replace `/absolute/path/to/backend-harness` with the absolute path where you cloned this repository.
 
+## Install For Codex
+
+This repo also ships Codex plugin metadata:
+
+- `plugins/backend-harness/.codex-plugin/plugin.json`
+- `.agents/plugins/marketplace.json`
+- `plugins/backend-harness/skills/backend-harness/agents/openai.yaml`
+
+Register the repo-local marketplace with Codex:
+
+```bash
+codex plugin marketplace add /absolute/path/to/backend-harness
+```
+
+Then install `backend-harness` from the `Backend Harness Local` marketplace in Codex.
+
 ## Configure
 
-1. Copy `templates/harness.config.json` from the plugin repo into the root of your target repository
+1. Copy `templates/harness.config.json` from the repo, or `plugins/backend-harness/skills/backend-harness/assets/templates/harness.config.json` from the installed skill, into the root of your target repository
 2. Edit the `commands` block for your stack:
    - `unit`: command to run unit tests only
    - `integration`: command to run integration tests only
@@ -41,9 +58,11 @@ Replace `/absolute/path/to/backend-harness` with the absolute path where you clo
 5. Refer to `plugins/backend-harness/skills/backend-harness/references/stack-config.md` for full field documentation and stack-swap examples (Node.js, Go, Python, etc.)
 6. Add `plans/` to your `.gitignore` — this directory contains ephemeral run state (`harness-state.json`) that should not be committed.
 
+`harness.config.json` contains commands that the agent will execute. Review those commands before running the harness in a target repository. The harness should stop rather than run destructive, suspicious, or unrelated commands.
+
 ## Use
 
-Two commands, in order:
+Claude Code exposes two slash commands:
 
 ```
 /harness-brainstorm   # Scope a feature into a spec/plan
@@ -52,11 +71,20 @@ Two commands, in order:
 
 Run `/harness-brainstorm` first to produce a plan file at `plans/<date>-<topic>-plan.md`. When the plan is approved, run `/harness-implement` to build it. The brainstorm command will suggest `/harness-implement` when ready.
 
+Codex uses prompt-driven entrypoints instead:
+
+```
+Use backend-harness to brainstorm a backend feature plan.
+Use backend-harness to implement the current plan with subagents and quality gates.
+```
+
+For Codex, mention subagents explicitly when you want the autonomous implementation loop. The harness depends on independent subagents to keep implementation and evaluation contexts separated.
+
 ## How It Works
 
-1. **`/harness-brainstorm`** → runs superpowers `brainstorming` + `writing-plans` → produces `plans/<date>-<topic>-plan.md`
+1. **Brainstorm mode** → runs superpowers `brainstorming` + `writing-plans` → produces `plans/<date>-<topic>-plan.md`
 
-2. **`/harness-implement`** → outer loop:
+2. **Implement mode** → outer loop:
    - Resume check (recover from session interruption)
    - Worktree creation (isolated branch via superpowers `using-git-worktrees`)
    - Conditional Context Brief (codebase orientation for non-trivial projects only)
@@ -67,7 +95,7 @@ Run `/harness-brainstorm` first to produce a plan file at `plans/<date>-<topic>-
    - Tiered Stryker mutation gate (validators 80%, services 70%, controllers 60% — configurable by tier)
    - Finish via superpowers `finishing-a-development-branch` (merge/PR/cleanup)
 
-3. **State persistence** — `plans/harness-state.json` is written after every step. If the session is interrupted, rerun `/harness-implement` to resume from the exact phase where it stopped.
+3. **State persistence** — `plans/harness-state.json` is written after every step. If the session is interrupted, rerun Implement mode to resume from the exact phase where it stopped.
 
 4. **Structural bias elimination** — The implementer (inner loop) never sees evaluator output. The `backend-evaluator` subagent runs independently and reports only to the orchestrator. Evaluation feedback does not flow back into the implementer's context.
 
