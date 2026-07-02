@@ -5,6 +5,12 @@
 
 Autonomous backend SDLC harness layered on superpowers' `subagent-driven-development`. The harness adds the production-hardening outer loop that superpowers' inner loop lacks. The outer loop enforces key quality mechanisms: disk-state persistence (compaction resilience), conditional Context Brief (codebase orientation for brownfield projects), independent backend evaluation (structural bias elimination), graduated re-evaluation (cost vs. regression coverage), tiered Stryker mutation gate (configurable thresholds by file type), oscillation detection (cyclic failure escalation), and 3-iteration cap with human escalation.
 
+## What this is (and isn't)
+
+This is a prompt-orchestration framework, not a traditional codebase: the core is a markdown state machine executed by LLM subagents, plus Python tooling that gates their output (diff-scoped mutation testing, oscillation detection, crash-safe state). Judge it as AI-developer-tooling design — the interesting decisions are in the orchestration, the failure handling, and the gating, not in code volume.
+
+The repos on [my profile](https://github.com/yovanmc) were built with the workflow this harness productizes; each carries a "How this was built" section pointing back here.
+
 ## Prerequisites
 
 - **superpowers plugin** — Required for the inner loop: `subagent-driven-development`, `using-git-worktrees`, `finishing-a-development-branch`
